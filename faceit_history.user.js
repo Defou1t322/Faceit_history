@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         FACEIT Match History
 // @namespace    https://github.com/Defou1t322/Faceit_history
-// @version      1.1.0
+// @version      1.1.1
 // @description  Мультипоиск истории матчей FACEIT, статистика по никам и определение пати. Работает прямо в браузере (без сервера) через GM_xmlhttpRequest.
-// @author       Defou1t322
+// @author       Defou1t/Eduard P
 // @homepageURL  https://github.com/Defou1t322/Faceit_history
 // @supportURL   https://github.com/Defou1t322/Faceit_history/issues
 // @updateURL    https://raw.githubusercontent.com/Defou1t322/Faceit_history/main/faceit_history.user.js
