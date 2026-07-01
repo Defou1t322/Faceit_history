@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FACEIT Match History
 // @namespace    https://github.com/Defou1t322/Faceit_history
-// @version      1.3.1
+// @version      1.3.2
 // @description  Мультипошук історії матчів FACEIT, статистика по нікам і визначення паті. Працює прямо в браузері (без сервера) через GM_xmlhttpRequest.
 // @author       Defou1t/Eduard P
 // @homepageURL  https://github.com/Defou1t322/Faceit_history
@@ -396,10 +396,6 @@
   const CSS = `
 :host{all:initial}
 *{box-sizing:border-box;font-family:'Segoe UI',Roboto,system-ui,sans-serif}
-.launcher{position:fixed;right:20px;bottom:20px;width:52px;height:52px;border-radius:50%;
-  background:linear-gradient(135deg,#ff5500,#ff8a3d);color:#1a0f06;font-weight:800;font-size:17px;
-  border:none;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.45);z-index:2147483000}
-.launcher:hover{transform:scale(1.06)}
 .overlay{position:fixed;inset:0;background:rgba(6,8,11,.72);backdrop-filter:blur(4px);
   z-index:2147483001;display:none;overflow:auto;padding:10px}
 .overlay.show{display:block}
@@ -570,7 +566,6 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
   }
 
   const HTML = `
-<button class="launcher" id="launcher" title="FACEIT Match History">FH</button>
 <div class="overlay" id="overlay">
   <div class="modal">
     <div class="modal-hd">
@@ -702,6 +697,38 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
     if (ST.stats.length) renderStats();
   }
 
+  function setupNavBtn(openFn) {
+    function tryInject() {
+      if (document.getElementById('fh-nav-btn')) return;
+      const anchor = document.querySelector('[class*="LogoHomeButtonContainer"]');
+      if (!anchor) return;
+      const btn = document.createElement('button');
+      btn.id = 'fh-nav-btn';
+      btn.title = 'FACEIT Match History';
+      btn.textContent = 'FH';
+      btn.style.cssText = [
+        'display:inline-flex', 'align-items:center', 'justify-content:center',
+        'width:28px', 'height:28px', 'border-radius:6px', 'border:none',
+        'cursor:pointer', 'background:linear-gradient(135deg,#ff5500,#ff8a3d)',
+        'color:#1a0f06', 'font-weight:800', 'font-size:11px',
+        'margin-left:6px', 'flex-shrink:0', 'vertical-align:middle',
+        'box-shadow:0 1px 6px rgba(255,85,0,.35)',
+        'transition:transform .15s,box-shadow .15s', 'line-height:1'
+      ].join(';');
+      btn.onmouseenter = () => { btn.style.transform = 'scale(1.12)'; btn.style.boxShadow = '0 2px 10px rgba(255,85,0,.55)'; };
+      btn.onmouseleave = () => { btn.style.transform = ''; btn.style.boxShadow = '0 1px 6px rgba(255,85,0,.35)'; };
+      btn.onclick = openFn;
+      anchor.after(btn);
+    }
+    let timer = null;
+    tryInject();
+    const obs = new MutationObserver(() => {
+      if (timer) return;
+      timer = setTimeout(() => { timer = null; tryInject(); }, 250);
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+  }
+
   function loadHistory() {
     try { return JSON.parse(GM_getValue('playerHistory', '[]')); } catch { return []; }
   }
@@ -759,7 +786,8 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
     $('#matchUrls').addEventListener('input', () => GM_setValue('matchUrls', $('#matchUrls').value));
     $('#game').addEventListener('change', () => GM_setValue('game', $('#game').value));
 
-    $('#launcher').onclick = () => $('#overlay').classList.add('show');
+    const openOverlay = () => $('#overlay').classList.add('show');
+    setupNavBtn(openOverlay);
     $('#close').onclick = () => $('#overlay').classList.remove('show');
     $('#overlay').onclick = e => { if (e.target.id === 'overlay') $('#overlay').classList.remove('show'); };
     $('#keyToggle').onclick = () => {
