@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FACEIT Match History
 // @namespace    https://github.com/Defou1t322/Faceit_history
-// @version      1.3.2
+// @version      1.3.3
 // @description  Мультипошук історії матчів FACEIT, статистика по нікам і визначення паті. Працює прямо в браузері (без сервера) через GM_xmlhttpRequest.
 // @author       Defou1t/Eduard P
 // @homepageURL  https://github.com/Defou1t322/Faceit_history
@@ -399,9 +399,12 @@
 .overlay{position:fixed;inset:0;background:rgba(6,8,11,.72);backdrop-filter:blur(4px);
   z-index:2147483001;display:none;overflow:auto;padding:10px}
 .overlay.show{display:block}
+.overlay.float{background:transparent!important;backdrop-filter:none!important;pointer-events:none;overflow:visible;padding:0}
+.overlay.float .modal{position:fixed;pointer-events:all;box-shadow:0 8px 48px rgba(0,0,0,.9);max-width:calc(100vw - 16px)}
 .modal{max-width:1560px;margin:0 auto;background:#0f1216;color:#e6eaef;border:1px solid #2a323c;
   border-radius:16px;padding:24px 30px;font-size:14px;line-height:1.5}
-.modal-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}
+.modal-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px;cursor:grab;user-select:none}
+.modal-hd:active{cursor:grabbing}
 .modal-hd-btns{display:flex;gap:8px;align-items:center;flex-shrink:0}
 .x{background:none;border:none;color:#8a96a3;font-size:24px;cursor:pointer;line-height:1;padding:0 2px}
 .x:hover{color:#e6eaef}
@@ -697,28 +700,74 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
     if (ST.stats.length) renderStats();
   }
 
+  function makeDraggable() {
+    const overlay = $('#overlay');
+    const modal = root.querySelector('.modal');
+    const handle = root.querySelector('.modal-hd');
+
+    function enterFloat() {
+      const rect = modal.getBoundingClientRect();
+      overlay.classList.add('float');
+      modal.style.left = rect.left + 'px';
+      modal.style.top = Math.max(0, rect.top) + 'px';
+      modal.style.width = rect.width + 'px';
+      modal.style.margin = '0';
+    }
+
+    handle.addEventListener('mousedown', e => {
+      if (e.button !== 0 || e.target.closest('button,a,input,select,textarea')) return;
+      e.preventDefault();
+      if (!overlay.classList.contains('float')) enterFloat();
+
+      const rect = modal.getBoundingClientRect();
+      const offX = e.clientX - rect.left;
+      const offY = e.clientY - rect.top;
+      handle.style.cursor = 'grabbing';
+
+      const onMove = ev => {
+        let l = ev.clientX - offX;
+        let t = ev.clientY - offY;
+        t = Math.max(0, Math.min(t, window.innerHeight - 48));
+        l = Math.max(-rect.width + 80, Math.min(l, window.innerWidth - 80));
+        modal.style.left = l + 'px';
+        modal.style.top = t + 'px';
+      };
+      const onUp = () => {
+        handle.style.cursor = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
   function setupNavBtn(openFn) {
     function tryInject() {
       if (document.getElementById('fh-nav-btn')) return;
-      const anchor = document.querySelector('[class*="LogoHomeButtonContainer"]');
-      if (!anchor) return;
+      const container = document.querySelector('[class*="LogoHomeButtonContainer"]');
+      if (!container) return;
       const btn = document.createElement('button');
       btn.id = 'fh-nav-btn';
       btn.title = 'FACEIT Match History';
       btn.textContent = 'FH';
       btn.style.cssText = [
         'display:inline-flex', 'align-items:center', 'justify-content:center',
-        'width:28px', 'height:28px', 'border-radius:6px', 'border:none',
+        'width:34px', 'height:34px', 'border-radius:8px', 'border:none',
         'cursor:pointer', 'background:linear-gradient(135deg,#ff5500,#ff8a3d)',
-        'color:#1a0f06', 'font-weight:800', 'font-size:11px',
-        'margin-left:6px', 'flex-shrink:0', 'vertical-align:middle',
+        'color:#1a0f06', 'font-weight:900', 'font-size:12px',
+        'flex-shrink:0', 'vertical-align:middle',
         'box-shadow:0 1px 6px rgba(255,85,0,.35)',
         'transition:transform .15s,box-shadow .15s', 'line-height:1'
       ].join(';');
       btn.onmouseenter = () => { btn.style.transform = 'scale(1.12)'; btn.style.boxShadow = '0 2px 10px rgba(255,85,0,.55)'; };
       btn.onmouseleave = () => { btn.style.transform = ''; btn.style.boxShadow = '0 1px 6px rgba(255,85,0,.35)'; };
       btn.onclick = openFn;
-      anchor.after(btn);
+      // Insert inside the logo container so it sits alongside the logo in its flex layout
+      container.style.display = 'flex';
+      container.style.alignItems = 'center';
+      container.style.gap = '6px';
+      container.appendChild(btn);
     }
     let timer = null;
     tryInject();
@@ -787,9 +836,15 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
     $('#game').addEventListener('change', () => GM_setValue('game', $('#game').value));
 
     const openOverlay = () => $('#overlay').classList.add('show');
+    const closeOverlay = () => {
+      const ov = $('#overlay'), m = root.querySelector('.modal');
+      ov.classList.remove('show', 'float');
+      m.style.left = ''; m.style.top = ''; m.style.width = ''; m.style.margin = '';
+    };
     setupNavBtn(openOverlay);
-    $('#close').onclick = () => $('#overlay').classList.remove('show');
-    $('#overlay').onclick = e => { if (e.target.id === 'overlay') $('#overlay').classList.remove('show'); };
+    makeDraggable();
+    $('#close').onclick = closeOverlay;
+    $('#overlay').onclick = e => { if (e.target.id === 'overlay' && !$('#overlay').classList.contains('float')) closeOverlay(); };
     $('#keyToggle').onclick = () => {
       const k = $('#key'), p = k.type === 'password';
       k.type = p ? 'text' : 'password';
