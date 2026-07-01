@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FACEIT Match History
 // @namespace    https://github.com/Defou1t322/Faceit_history
-// @version      1.3.0
+// @version      1.3.1
 // @description  Мультипошук історії матчів FACEIT, статистика по нікам і визначення паті. Працює прямо в браузері (без сервера) через GM_xmlhttpRequest.
 // @author       Defou1t/Eduard P
 // @homepageURL  https://github.com/Defou1t322/Faceit_history
@@ -97,6 +97,7 @@
       menu_open: 'Відкрити FACEIT Match History',
       period_last: 'Останні N матчів', period_dates: 'Дати (від–до)', period_offset: 'Номери матчів (offset)',
       match_label: (i, score) => `Матч #${i} · ${score}`,
+      hist_label: 'Нещодавні:', hist_clear: 'Очистити історію',
     },
     ru: {
       subtitle: 'Мультипоиск · статистика по никам · определение пати',
@@ -157,6 +158,7 @@
       menu_open: 'Открыть FACEIT Match History',
       period_last: 'Последние N матчей', period_dates: 'Даты (от–до)', period_offset: 'Номера матчей (offset)',
       match_label: (i, score) => `Матч #${i} · ${score}`,
+      hist_label: 'Недавние:', hist_clear: 'Очистить историю',
     }
   };
 
@@ -473,6 +475,13 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
 .ht td{padding:5px 8px;border-bottom:1px solid #1a2028;color:#8a96a3;vertical-align:top}
 .ht td:first-child{color:#e6eaef;white-space:nowrap;font-weight:600;padding-right:14px;min-width:100px}
 .ms{color:#5aa0ff;font-weight:700}.mp{color:#c779e8;font-weight:700}.mm{color:#5ed29a;font-weight:700}
+.hist-wrap{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+.hist-label{font-size:11px;color:#5a6a7a;white-space:nowrap;flex-shrink:0}
+.hist-chips{display:flex;gap:5px;flex-wrap:wrap;flex:1}
+.hist-chip{background:#141a20;border:1px solid #232b34;border-radius:6px;padding:2px 9px;font-size:11px;color:#6b7a8a;cursor:pointer;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.8}
+.hist-chip:hover{border-color:#ff5500;color:#c0c8d4}
+.hist-clear{font-size:10px;color:#3a4a5a;cursor:pointer;flex-shrink:0;background:none;border:none;padding:0}
+.hist-clear:hover{color:#ff5500}
 `;
 
   function helpHTML() {
@@ -587,6 +596,11 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
             <button class="btn" id="keyToggle" type="button" data-i18n="key_show"></button>
           </div>
           <div style="margin-top:14px">
+            <div id="histWrap" class="hist-wrap" style="display:none">
+              <span class="hist-label" data-i18n="hist_label"></span>
+              <div id="histChips" class="hist-chips"></div>
+              <button class="hist-clear" id="histClear" type="button" data-i18n="hist_clear"></button>
+            </div>
             <label data-i18n="label_players"></label>
             <textarea id="players" placeholder="gwizdakk&#10;https://www.faceit.com/ru/players/..."></textarea>
           </div>
@@ -688,6 +702,41 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
     if (ST.stats.length) renderStats();
   }
 
+  function loadHistory() {
+    try { return JSON.parse(GM_getValue('playerHistory', '[]')); } catch { return []; }
+  }
+  function saveToHistory(text) {
+    text = text.trim();
+    if (!text) return;
+    let hist = loadHistory().filter(h => h !== text);
+    hist.unshift(text);
+    GM_setValue('playerHistory', JSON.stringify(hist.slice(0, 5)));
+  }
+  function chipLabel(text) {
+    const nicks = text.split('\n').map(s => s.trim()).filter(Boolean).map(s => {
+      const m = /\/players\/([^/?#]+)/.exec(s); return m ? m[1] : s;
+    });
+    if (nicks.length === 1) return nicks[0].slice(0, 24);
+    return nicks.slice(0, 2).map(n => n.slice(0, 12)).join(', ') + (nicks.length > 2 ? ` +${nicks.length - 2}` : '');
+  }
+  function renderHistory() {
+    const wrap = $('#histWrap');
+    if (!wrap) return;
+    const hist = loadHistory();
+    const chipsEl = $('#histChips');
+    chipsEl.innerHTML = '';
+    hist.forEach(text => {
+      const btn = document.createElement('button');
+      btn.className = 'hist-chip';
+      btn.title = text;
+      btn.textContent = chipLabel(text);
+      btn.type = 'button';
+      btn.onclick = () => { $('#players').value = text; GM_setValue('players', text); };
+      chipsEl.append(btn);
+    });
+    wrap.style.display = hist.length ? '' : 'none';
+  }
+
   function buildUI() {
     const host = document.createElement('div');
     host.id = 'fh-host';
@@ -702,6 +751,8 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
     $('#key').value = GM_getValue('key', '');
     $('#players').value = GM_getValue('players', '');
     $('#game').value = GM_getValue('game', 'cs2');
+    renderHistory();
+    $('#histClear').addEventListener('click', () => { GM_setValue('playerHistory', '[]'); renderHistory(); });
     $('#key').addEventListener('input', () => GM_setValue('key', $('#key').value));
     $('#players').addEventListener('input', () => GM_setValue('players', $('#players').value));
     $('#matchUrls').value = GM_getValue('matchUrls', '');
@@ -786,6 +837,7 @@ tbody tr:hover{background:#1e252d}tr.self td{color:#5aa0ff}
     let period;
     try { period = buildPeriod(); } catch (e) { setStatus(e.message, 'err'); return; }
 
+    if (players.length) { saveToHistory($('#players').value); renderHistory(); }
     searching = true; client = new Client(apiKey, setCount);
     setRunning(true); $('#log').innerHTML = ''; $('#matches').innerHTML = '';
     setProgress(0); setCount(0); setStatus(t('status_requesting'));
